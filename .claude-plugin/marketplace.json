@@ -1,0 +1,14 @@
+{
+  "name": "vizcon",
+  "owner": {
+    "name": "Pownek-code"
+  },
+  "description": "Interactive visual explainers for any concept, generated on demand in Claude Code.",
+  "plugins": [
+    {
+      "name": "vizcon",
+      "source": "./",
+      "description": "Interactive visual explainers for any concept, generated on demand with /visualize."
+    }
+  ]
+}

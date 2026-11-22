@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- TODO: concept name, 2–4 words -->
+<title>Bubble Sort</title>
+<style>
+/* ---------- Theme tokens (keep) ---------- */
+:root {
+  --bg: #fbfaf8; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b72; --line: #e4e2dd;
+  --c1: #3b6fd8; --c2: #d9822b; --c3: #2e9e6b; --c4: #b04fc4; --c5: #c9a227;
+  --good: #2e9e6b; --bad: #d64545; --focus: #d9822b; --soft: #f1efea;
+  --radius: 12px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa3; --line: #2e2e33;
+    --c1: #6f9bf0; --c2: #f0a35a; --c3: #4cc48f; --c4: #cf7fe0; --c5: #e3c254;
+    --good: #4cc48f; --bad: #f07070; --focus: #f0a35a; --soft: #26262a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141416; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa3; --line: #2e2e33;
+  --c1: #6f9bf0; --c2: #f0a35a; --c3: #4cc48f; --c4: #cf7fe0; --c5: #e3c254;
+  --good: #4cc48f; --bad: #f07070; --focus: #f0a35a; --soft: #26262a; color-scheme: dark;
+}
+/* ---------- Layout (keep) ---------- */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); margin: 0 0 4px; letter-spacing: -0.01em; }
+.insight { font-size: 1.1rem; color: var(--muted); margin: 0 0 22px; max-width: 70ch; }
+.insight b { color: var(--ink); font-weight: 600; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.grid { display: grid; gap: 16px; align-items: start; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.stage { width: 100%; height: auto; display: block; overflow: visible; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 14px; }
+button { font: inherit; font-size: .92rem; background: var(--soft); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 84px; }
+input[type=range] { accent-color: var(--focus); width: 160px; }
+input[type=text] { font: inherit; font-family: var(--mono); font-size: .9rem; padding: 6px 10px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+label { font-size: .9rem; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }
+output { font-family: var(--mono); color: var(--ink); min-width: 3ch; }
+.narration { margin-top: 14px; padding: 12px 14px; border-left: 3px solid var(--focus);
+  background: var(--soft); border-radius: 0 8px 8px 0; min-height: 3.2em; }
+h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+ul.notice { margin: 0; padding-left: 1.1em; } ul.notice li { margin: 4px 0; }
+.misconception { margin-top: 16px; border-left: 3px solid var(--bad); }
+.code { font-family: var(--mono); font-size: .82rem; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.code .ln { display: block; padding: 1px 8px; border-radius: 4px; }
+.code .ln.active { background: color-mix(in srgb, var(--focus) 22%, transparent); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .85rem; color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+svg text { fill: var(--ink); font-family: system-ui, sans-serif; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+/* ---------- Concept-specific styles go here ---------- */
+.bar { transition: y .25s, height .25s, fill .2s; }
+</style>
+</head>
+<body>
+<main>
+  <!-- 1. Title + core insight -->
+  <h1>Bubble Sort</h1>
+  <p class="insight">Repeatedly swap neighbours that are out of order — <b>after pass <i>k</i>, the
+    <i>k</i> largest values are locked in place at the end.</b></p>
+
+  <div class="grid">
+    <section class="card">
+      <!-- 2. Stage -->
+      <svg id="stage" class="stage" viewBox="0 0 600 260" role="img" aria-label="Array being sorted"></svg>
+      <div class="legend">
+        <span><i style="background:var(--c1)"></i>unsorted</span>
+        <span><i style="background:var(--focus)"></i>being compared</span>
+        <span><i style="background:var(--good)"></i>locked in place</span>
+      </div>
+      <!-- 3. Controls -->
+      <div class="controls" id="controls"></div>
+      <div class="controls">
+        <label>Input <input type="text" id="input" value="7, 2, 9, 4, 1, 8, 3" size="22"></label>
+        <button id="apply">Use input</button>
+        <button id="shuffle">Shuffle</button>
+      </div>
+      <!-- 4. Narration -->
+      <div class="narration" id="narration" aria-live="polite"></div>
+    </section>
+
+    <aside>
+      <section class="card">
+        <h2>Pseudocode</h2>
+        <pre class="code" id="code"></pre>
+      </section>
+      <!-- 5. What to notice -->
+      <section class="card" style="margin-top:16px">
+        <h2>What to notice</h2>
+        <ul class="notice">
+          <li>The biggest value "bubbles" to the right in the very first pass.</li>
+          <li>Each pass compares one fewer pair — the green tail never changes again.</li>
+          <li>Try an already-sorted input: one pass with zero swaps, and it stops.</li>
+        </ul>
+      </section>
+      <!-- 6. Misconception -->
+      <section class="card misconception">
+        <h2>You might think…</h2>
+        <p style="margin:0">…that it always needs <i>n</i> passes. With the early-exit check it stops as
+          soon as a pass makes no swaps, so sorted input costs only <i>O(n)</i>.</p>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script>
+/* =================== Helper library (keep) =================== */
+const $ = (s, r = document) => r.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+/** Create an SVG element: svg('rect', {x:0, y:0, width:10}, parent) */
+function svg(tag, attrs = {}, parent) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) k === 'text' ? (el.textContent = v) : el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+/** Pointer position in an SVG's own coordinates (for dragging). */
+function svgPoint(svgEl, evt) {
+  const p = svgEl.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY;
+  return p.matrixTransform(svgEl.getScreenCTM().inverse());
+}
+/** Read a CSS colour token, e.g. css('--focus') */
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/** Labelled range slider. Returns the <input>. onInput(value) fires live. */
+function slider(parent, { label, min, max, step = 1, value, fmt = v => v, onInput }) {
+  const wrap = document.createElement('label');
+  wrap.textContent = label + ' ';
+  const inp = Object.assign(document.createElement('input'), { type: 'range', min, max, step, value });
+  const out = document.createElement('output'); out.textContent = fmt(+value);
+  inp.addEventListener('input', () => { out.textContent = fmt(+inp.value); onInput(+inp.value); });
+  wrap.append(inp, out); parent.appendChild(wrap);
+  return inp;
+}
+/**
+ * Stepper: play/pause/step/scrub through precomputed frames.
+ * new Stepper(controlsEl, { frames, render(frame, i), speed: ms, autoplay })
+ * Call .setFrames(newFrames) after the input changes. Space / ← / → keys are wired.
+ */
+class Stepper {
+  constructor(root, { frames, render, speed = 700, autoplay = true }) {
+    Object.assign(this, { frames, render, speed, i: 0, timer: null });
+    const b = (txt, title, fn, cls = '') => {
+      const el = Object.assign(document.createElement('button'), { textContent: txt, title, className: cls });
+      el.addEventListener('click', fn); root.appendChild(el); return el;
+    };
+    b('⏮', 'Restart', () => { this.pause(); this.go(0); });
+    b('◀', 'Step back (←)', () => { this.pause(); this.go(this.i - 1); });
+    this.playBtn = b('▶ Play', 'Play / pause (Space)', () => this.toggle(), 'primary');
+    b('▶|', 'Step forward (→)', () => { this.pause(); this.go(this.i + 1); });
+    this.scrub = Object.assign(document.createElement('input'), { type: 'range', min: 0, value: 0, title: 'Scrub' });
+    this.scrub.addEventListener('input', () => { this.pause(); this.go(+this.scrub.value); });
+    root.appendChild(this.scrub);
+    this.counter = document.createElement('output'); root.appendChild(this.counter);
+    slider(root, { label: 'Speed', min: 1, max: 5, value: 3, fmt: v => v + '×',
+      onInput: v => { this.speed = 1400 / v; if (this.timer) { this.pause(); this.play(); } } });
+    this.speed = 1400 / 3;
+    document.addEventListener('keydown', e => {
+      if (e.target.matches('input[type=text], textarea')) return;
+      if (e.code === 'Space') { e.preventDefault(); this.toggle(); }
+      if (e.code === 'ArrowRight') { this.pause(); this.go(this.i + 1); }
+      if (e.code === 'ArrowLeft') { this.pause(); this.go(this.i - 1); }
+    });
+    this.setFrames(frames);
+    if (autoplay && !matchMedia('(prefers-reduced-motion: reduce)').matches) this.play();
+  }
+  setFrames(frames) { this.frames = frames; this.scrub.max = frames.length - 1; this.go(0); }
+  go(i) {
+    this.i = Math.max(0, Math.min(this.frames.length - 1, i));
+    this.scrub.value = this.i; this.counter.textContent = `${this.i + 1}/${this.frames.length}`;
+    this.render(this.frames[this.i], this.i);
+  }
+  play() {
+    if (this.i >= this.frames.length - 1) this.go(0);
+    this.playBtn.textContent = '⏸ Pause';
+    this.timer = setInterval(() => { this.i >= this.frames.length - 1 ? this.pause() : this.go(this.i + 1); }, this.speed);
+  }
+  pause() { clearInterval(this.timer); this.timer = null; this.playBtn.textContent = '▶ Play'; }
+  toggle() { this.timer ? this.pause() : this.play(); }
+}
+/** Render pseudocode lines into <pre>, returns highlight(lineIndex). */
+function codePanel(pre, lines) {
+  pre.innerHTML = '';
+  const els = lines.map(l => { const s = document.createElement('span'); s.className = 'ln'; s.textContent = l; pre.appendChild(s); return s; });
+  return idx => els.forEach((el, j) => el.classList.toggle('active', j === idx));
+}
+
+/* =================== Concept-specific code (replace) =================== */
+const CODE = [
+  'for pass in 0 .. n-2:',
+  '  swapped = false',
+  '  for j in 0 .. n-2-pass:',
+  '    if a[j] > a[j+1]:',
+  '      swap(a[j], a[j+1]); swapped = true',
+  '  if not swapped: break   # already sorted',
+  'done',
+];
+const highlight = codePanel($('#code'), CODE);
+
+/** Run the REAL algorithm and record a frame for every meaningful moment. */
+function bubbleFrames(input) {
+  const a = [...input], n = a.length, frames = [];
+  let sortedFrom = n;
+  const snap = (line, msg, cmp = []) => frames.push({ a: [...a], line, msg, cmp, sortedFrom });
+  snap(0, `Start with ${n} values. Nothing is known to be in place yet.`);
+  for (let pass = 0; pass < n - 1; pass++) {
+    let swapped = false;
+    for (let j = 0; j < n - 1 - pass; j++) {
+      if (a[j] > a[j + 1]) {
+        snap(3, `Pass ${pass + 1}: ${a[j]} > ${a[j + 1]}, so they are out of order — swap them.`, [j, j + 1]);
+        [a[j], a[j + 1]] = [a[j + 1], a[j]]; swapped = true;
+        snap(4, `Swapped. ${a[j + 1]} keeps moving right while it is bigger than its neighbour.`, [j, j + 1]);
+      } else {
+        snap(3, `Pass ${pass + 1}: ${a[j]} ≤ ${a[j + 1]}, already in order — leave them.`, [j, j + 1]);
+      }
+    }
+    sortedFrom = n - 1 - pass;
+    if (!swapped) {
+      sortedFrom = 0;
+      snap(5, `Pass ${pass + 1} made no swaps, so every pair is in order — stop early.`);
+      break;
+    }
+    snap(2, `End of pass ${pass + 1}: ${a[sortedFrom]} is now locked in its final position.`);
+  }
+  sortedFrom = 0;
+  snap(6, 'Sorted. Every value is locked in place.');
+  return frames;
+}
+
+const stage = $('#stage');
+function render(f) {
+  stage.innerHTML = '';
+  const n = f.a.length, max = Math.max(...f.a, 1), W = 600, H = 230, gap = 10;
+  const bw = (W - gap * (n - 1)) / n;
+  f.a.forEach((v, i) => {
+    const h = 20 + (v / max) * (H - 40), x = i * (bw + gap);
+    const fill = f.cmp.includes(i) ? css('--focus') : i >= f.sortedFrom ? css('--good') : css('--c1');
+    svg('rect', { class: 'bar', x, y: H - h, width: bw, height: h, rx: 6, fill }, stage);
+    svg('text', { x: x + bw / 2, y: H - h - 8, 'text-anchor': 'middle', 'font-size': 16, 'font-weight': 600, text: v }, stage);
+    svg('text', { x: x + bw / 2, y: H + 22, 'text-anchor': 'middle', 'font-size': 12, fill: css('--muted'), text: i }, stage);
+  });
+  $('#narration').textContent = f.msg;
+  highlight(f.line);
+}
+
+const parse = s => s.split(/[\s,]+/).map(Number).filter(Number.isFinite).slice(0, 14);
+const stepper = new Stepper($('#controls'), { frames: bubbleFrames(parse($('#input').value)), render });
+$('#apply').onclick = () => { const v = parse($('#input').value); if (v.length > 1) stepper.setFrames(bubbleFrames(v)); };
+$('#shuffle').onclick = () => {
+  const v = Array.from({ length: 7 }, () => 1 + Math.floor(Math.random() * 20));
+  $('#input').value = v.join(', '); stepper.setFrames(bubbleFrames(v));
+};
+</script>
+</body>
+</html>

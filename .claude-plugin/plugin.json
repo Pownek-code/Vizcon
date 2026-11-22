@@ -1,0 +1,15 @@
+{
+  "name": "vizcon",
+  "version": "0.1.0",
+  "description": "Turn any concept you're trying to understand into an interactive, self-contained HTML visualization.",
+  "keywords": [
+    "visualization",
+    "learning",
+    "explainer",
+    "diagram",
+    "education"
+  ],
+  "author": {
+    "name": "Pownek-code"
+  }
+}

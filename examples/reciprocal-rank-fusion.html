@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- TODO: concept name, 2–4 words -->
+<title>Reciprocal Rank Fusion</title>
+<style>
+/* ---------- Theme tokens (keep) ---------- */
+:root {
+  --bg: #fbfaf8; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b72; --line: #e4e2dd;
+  --c1: #3b6fd8; --c2: #d9822b; --c3: #2e9e6b; --c4: #b04fc4; --c5: #c9a227;
+  --good: #2e9e6b; --bad: #d64545; --focus: #d9822b; --soft: #f1efea;
+  --radius: 12px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa3; --line: #2e2e33;
+    --c1: #6f9bf0; --c2: #f0a35a; --c3: #4cc48f; --c4: #cf7fe0; --c5: #e3c254;
+    --good: #4cc48f; --bad: #f07070; --focus: #f0a35a; --soft: #26262a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141416; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa3; --line: #2e2e33;
+  --c1: #6f9bf0; --c2: #f0a35a; --c3: #4cc48f; --c4: #cf7fe0; --c5: #e3c254;
+  --good: #4cc48f; --bad: #f07070; --focus: #f0a35a; --soft: #26262a; color-scheme: dark;
+}
+/* ---------- Layout (keep) ---------- */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); margin: 0 0 4px; letter-spacing: -0.01em; }
+.insight { font-size: 1.1rem; color: var(--muted); margin: 0 0 22px; max-width: 70ch; }
+.insight b { color: var(--ink); font-weight: 600; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.grid { display: grid; gap: 16px; align-items: start; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.stage { width: 100%; height: auto; display: block; overflow: visible; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 14px; }
+button { font: inherit; font-size: .92rem; background: var(--soft); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 84px; }
+input[type=range] { accent-color: var(--focus); width: 160px; }
+input[type=text] { font: inherit; font-family: var(--mono); font-size: .9rem; padding: 6px 10px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+label { font-size: .9rem; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }
+output { font-family: var(--mono); color: var(--ink); min-width: 3ch; }
+.narration { margin-top: 14px; padding: 12px 14px; border-left: 3px solid var(--focus);
+  background: var(--soft); border-radius: 0 8px 8px 0; min-height: 3.2em; }
+h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+ul.notice { margin: 0; padding-left: 1.1em; } ul.notice li { margin: 4px 0; }
+.misconception { margin-top: 16px; border-left: 3px solid var(--bad); }
+.code { font-family: var(--mono); font-size: .82rem; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.code .ln { display: block; padding: 1px 8px; border-radius: 4px; }
+.code .ln.active { background: color-mix(in srgb, var(--focus) 22%, transparent); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .85rem; color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+svg text { fill: var(--ink); font-family: system-ui, sans-serif; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.col-h { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; fill: var(--muted); font-weight: 600; }
+.item { cursor: pointer; }
+.item rect.box { fill: var(--soft); stroke: var(--line); }
+.item.sel rect.box { stroke: var(--focus); stroke-width: 2; }
+.item.out { opacity: .35; }
+.link { fill: none; stroke-width: 2; opacity: .55; }
+.link.dim { opacity: .08; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.calc { font-family: var(--mono); font-size: .85rem; white-space: pre-wrap; margin: 0; line-height: 1.7; }
+.calc .lx { color: var(--c1); } .calc .sm { color: var(--c4); }
+table.raw { width: 100%; border-collapse: collapse; font-size: .85rem; }
+table.raw td, table.raw th { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+table.raw td.num { font-family: var(--mono); text-align: right; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Reciprocal Rank Fusion</h1>
+  <p class="insight">Two indexes rank the same chunks; each chunk earns <b>weight ÷ (k + rank)</b> from every
+    list it appears in, and the sum decides the final order. <b>Only ranks count, never the raw scores.</b></p>
+
+  <div class="grid">
+    <section class="card">
+      <svg id="stage" class="stage" viewBox="0 0 640 470" role="img" aria-label="Lexical and semantic rankings fused into one"></svg>
+      <div class="legend">
+        <span><i style="background:var(--c1)"></i>lexical (BM25) contribution</span>
+        <span><i style="background:var(--c4)"></i>semantic (e5) contribution</span>
+        <span><i style="background:var(--good)"></i>returned (top_k)</span>
+      </div>
+      <div class="controls" id="controls"></div>
+      <div class="presets">
+        <button data-p="default">Repo defaults (k=60)</button>
+        <button data-p="k0">k = 0: top rank dominates</button>
+        <button data-p="sem3">Trust semantic 3×</button>
+        <button data-p="shallow">Depth 3</button>
+      </div>
+      <div class="narration" id="narration" aria-live="polite"></div>
+    </section>
+
+    <aside>
+      <section class="card">
+        <h2>Score of <span id="selname">—</span></h2>
+        <pre class="calc" id="calc"></pre>
+        <p style="margin:8px 0 0;font-size:.85rem;color:var(--muted)">Click any chunk to see its sum.</p>
+      </section>
+      <section class="card" style="margin-top:16px">
+        <h2>What to notice</h2>
+        <ul class="notice">
+          <li><b>C</b> is #1 in <i>neither</i> list (#3 and #2) yet beats both #1s — being good in both lists wins.</li>
+          <li><b>A</b> and <b>B</b> tie exactly (1/61 + 1/65); A goes first because the lexical index ranked it better.</li>
+          <li>Drag <b>k</b> toward 0: rank 1 becomes worth far more than rank 2, and the list winners take over.</li>
+                    <li><b>H</b> has BM25 score 0, so it gets <i>no</i> lexical rank at all (filtered out, not ranked last).</li>
+        </ul>
+      </section>
+      <section class="card misconception">
+        <h2>You might think…</h2>
+        <p style="margin:0">…that a BM25 score of 14.2 beats a cosine of 0.86. Those numbers are on different
+          scales and are <b>thrown away</b> — change them in the table below and nothing moves.</p>
+        <table class="raw" id="raw" style="margin-top:10px"></table>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script>
+/* =================== Helper library (keep) =================== */
+const $ = (s, r = document) => r.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+/** Create an SVG element: svg('rect', {x:0, y:0, width:10}, parent) */
+function svg(tag, attrs = {}, parent) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) k === 'text' ? (el.textContent = v) : el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+/** Pointer position in an SVG's own coordinates (for dragging). */
+function svgPoint(svgEl, evt) {
+  const p = svgEl.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY;
+  return p.matrixTransform(svgEl.getScreenCTM().inverse());
+}
+/** Read a CSS colour token, e.g. css('--focus') */
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/** Labelled range slider. Returns the <input>. onInput(value) fires live. */
+function slider(parent, { label, min, max, step = 1, value, fmt = v => v, onInput }) {
+  const wrap = document.createElement('label');
+  wrap.textContent = label + ' ';
+  const inp = Object.assign(document.createElement('input'), { type: 'range', min, max, step, value });
+  const out = document.createElement('output'); out.textContent = fmt(+value);
+  inp.addEventListener('input', () => { out.textContent = fmt(+inp.value); onInput(+inp.value); });
+  wrap.append(inp, out); parent.appendChild(wrap);
+  return inp;
+}
+/**
+ * Stepper: play/pause/step/scrub through precomputed frames.
+ * new Stepper(controlsEl, { frames, render(frame, i), speed: ms, autoplay })
+ * Call .setFrames(newFrames) after the input changes. Space / ← / → keys are wired.
+ */
+class Stepper {
+  constructor(root, { frames, render, speed = 700, autoplay = true }) {
+    Object.assign(this, { frames, render, speed, i: 0, timer: null });
+    const b = (txt, title, fn, cls = '') => {
+      const el = Object.assign(document.createElement('button'), { textContent: txt, title, className: cls });
+      el.addEventListener('click', fn); root.appendChild(el); return el;
+    };
+    b('⏮', 'Restart', () => { this.pause(); this.go(0); });
+    b('◀', 'Step back (←)', () => { this.pause(); this.go(this.i - 1); });
+    this.playBtn = b('▶ Play', 'Play / pause (Space)', () => this.toggle(), 'primary');
+    b('▶|', 'Step forward (→)', () => { this.pause(); this.go(this.i + 1); });
+    this.scrub = Object.assign(document.createElement('input'), { type: 'range', min: 0, value: 0, title: 'Scrub' });
+    this.scrub.addEventListener('input', () => { this.pause(); this.go(+this.scrub.value); });
+    root.appendChild(this.scrub);
+    this.counter = document.createElement('output'); root.appendChild(this.counter);
+    slider(root, { label: 'Speed', min: 1, max: 5, value: 3, fmt: v => v + '×',
+      onInput: v => { this.speed = 1400 / v; if (this.timer) { this.pause(); this.play(); } } });
+    this.speed = 1400 / 3;
+    document.addEventListener('keydown', e => {
+      if (e.target.matches('input[type=text], textarea')) return;
+      if (e.code === 'Space') { e.preventDefault(); this.toggle(); }
+      if (e.code === 'ArrowRight') { this.pause(); this.go(this.i + 1); }
+      if (e.code === 'ArrowLeft') { this.pause(); this.go(this.i - 1); }
+    });
+    this.setFrames(frames);
+    if (autoplay && !matchMedia('(prefers-reduced-motion: reduce)').matches) this.play();
+  }
+  setFrames(frames) { this.frames = frames; this.scrub.max = frames.length - 1; this.go(0); }
+  go(i) {
+    this.i = Math.max(0, Math.min(this.frames.length - 1, i));
+    this.scrub.value = this.i; this.counter.textContent = `${this.i + 1}/${this.frames.length}`;
+    this.render(this.frames[this.i], this.i);
+  }
+  play() {
+    if (this.i >= this.frames.length - 1) this.go(0);
+    this.playBtn.textContent = '⏸ Pause';
+    this.timer = setInterval(() => { this.i >= this.frames.length - 1 ? this.pause() : this.go(this.i + 1); }, this.speed);
+  }
+  pause() { clearInterval(this.timer); this.timer = null; this.playBtn.textContent = '▶ Play'; }
+  toggle() { this.timer ? this.pause() : this.play(); }
+}
+/** Render pseudocode lines into <pre>, returns highlight(lineIndex). */
+function codePanel(pre, lines) {
+  pre.innerHTML = '';
+  const els = lines.map(l => { const s = document.createElement('span'); s.className = 'ln'; s.textContent = l; pre.appendChild(s); return s; });
+  return idx => els.forEach((el, j) => el.classList.toggle('active', j === idx));
+}
+
+/* =================== Reciprocal Rank Fusion (mirrors src/hybrid_search.py) =================== */
+const CHUNKS = {
+  A: 'README · "hybrid retrieval"',
+  B: 'hybrid_search.py · class doc',
+  C: 'design note · rank fusion',
+  D: 'bm25.py · scoring',
+  E: 'semantic.py · e5 encoder',
+  F: 'blog · combining rankers',
+  G: 'tests · tie-breaking',
+  H: 'glossary · "merging results"',
+};
+// Raw scores from each index (only their ORDER is used by RRF).
+const LEX = [['A', 14.2], ['D', 11.8], ['C', 9.1], ['G', 8.7], ['B', 6.3], ['F', 2.0], ['E', 0.9], ['H', 0]];
+const SEM = [['B', 0.86], ['C', 0.84], ['E', 0.81], ['F', 0.80], ['A', 0.77], ['H', 0.61], ['G', 0.55], ['D', 0.42]];
+
+const P = { k: 60, w: 1.0, depth: 10, topK: 5 };
+let selected = 'C';
+
+function fuse({ k, w, depth, topK }) {
+  const d = Math.max(topK, depth);                           // depth = max(top_k, candidate_depth)
+  const lex = LEX.slice(0, d).filter(([, s]) => s > 0).map(([id]) => id);   // zero BM25 => no lexical rank
+  const sem = SEM.slice(0, d).map(([id]) => id);
+  const score = {}, parts = {};
+  for (const [list, weight, tag] of [[lex, 1.0, 'lx'], [sem, w, 'sm']]) {
+    list.forEach((id, i) => {
+      const rank = i + 1, c = weight / (k + rank);
+      score[id] = (score[id] || 0) + c;
+      (parts[id] ||= { lx: null, sm: null })[tag] = { rank, weight, c };
+    });
+  }
+  const lexRank = Object.fromEntries(lex.map((id, i) => [id, i + 1]));
+  const order = Object.keys(score).sort((a, b) =>
+    (score[b] - score[a]) || ((lexRank[a] ?? Infinity) - (lexRank[b] ?? Infinity)) || a.localeCompare(b));
+  return { lex, sem, score, parts, order, top: order.slice(0, topK), d };
+}
+
+/* ---- drawing ---- */
+const stage = $('#stage');
+const ROW = 44, TOP = 46, COLW = 150, XL = 0, XF = 230, XS = 490, FW = 180;
+let shown = {};   // current animated y of each fused row
+function rowY(i) { return TOP + i * ROW; }
+
+function draw(R, animate = true) {
+  const target = {};
+  R.order.forEach((id, i) => target[id] = rowY(i));
+  const start = { ...shown };
+  const t0 = performance.now(), dur = animate && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 350 : 0;
+  const frame = now => {
+    const t = dur ? Math.min(1, (now - t0) / dur) : 1, e = 1 - Math.pow(1 - t, 3);
+    for (const id of R.order) shown[id] = (start[id] ?? target[id]) + (target[id] - (start[id] ?? target[id])) * e;
+    paint(R);
+    if (t < 1) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+function paint(R) {
+  stage.innerHTML = '';
+  svg('text', { x: XL, y: 22, class: 'col-h', text: 'Lexical (BM25)' }, stage);
+  svg('text', { x: XF, y: 22, class: 'col-h', text: 'Fused (RRF)' }, stage);
+  svg('text', { x: XS, y: 22, class: 'col-h', text: 'Semantic (e5)' }, stage);
+  const maxScore = Math.max(...Object.values(R.score));
+  const allLex = LEX.map(([id]) => id), allSem = SEM.map(([id]) => id);
+
+  // links first (behind boxes)
+  const link = (x1, y1, x2, y2, color, id) => {
+    const mx = (x1 + x2) / 2;
+    svg('path', { d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`, stroke: color,
+      class: 'link' + (selected && selected !== id ? ' dim' : '') }, stage);
+  };
+  R.lex.forEach((id, i) => link(XL + COLW, rowY(i) + 16, XF, shown[id] + 16, css('--c1'), id));
+  R.sem.forEach((id, i) => link(XS, rowY(i) + 16, XF + FW, shown[id] + 16, css('--c4'), id));
+
+  // source columns
+  const sourceCol = (ids, used, x, color) => ids.forEach((id, i) => {
+    const inList = used.includes(id);
+    const g = svg('g', { class: 'item' + (id === selected ? ' sel' : '') + (inList ? '' : ' out'),
+      transform: `translate(${x},${rowY(i)})` }, stage);
+    svg('rect', { class: 'box', width: COLW, height: 32, rx: 7 }, g);
+    svg('text', { x: 10, y: 21, 'font-size': 13, 'font-weight': 700, fill: color, text: inList ? `#${used.indexOf(id) + 1}` : '—' }, g);
+    svg('text', { x: 40, y: 21, 'font-size': 14, 'font-weight': 600, text: id }, g);
+    svg('text', { x: 58, y: 21, 'font-size': 11, fill: css('--muted'), text: inList ? '' : (x === XL && LEX.find(r => r[0] === id)[1] === 0 ? 'score 0' : 'below depth') }, g);
+    g.onclick = () => select(id);
+  });
+  sourceCol(allLex, R.lex, XL, css('--c1'));
+  sourceCol(allSem, R.sem, XS, css('--c4'));
+
+  // fused column with stacked contribution bars
+  R.order.forEach((id, i) => {
+    const inTop = R.top.includes(id);
+    const g = svg('g', { class: 'item' + (id === selected ? ' sel' : ''), transform: `translate(${XF},${shown[id]})` }, stage);
+    svg('rect', { class: 'box', width: FW, height: 32, rx: 7, ...(inTop ? { style: `stroke:${css('--good')}` } : {}) }, g);
+    svg('text', { x: 10, y: 21, 'font-size': 13, 'font-weight': 700, fill: inTop ? css('--good') : css('--muted'), text: `${i + 1}` }, g);
+    svg('text', { x: 30, y: 21, 'font-size': 14, 'font-weight': 600, text: id }, g);
+    const p = R.parts[id], barMax = FW - 56 - 8, bx = 48;
+    let x = bx;
+    for (const [tag, col] of [['lx', '--c1'], ['sm', '--c4']]) {
+      if (!p[tag]) continue;
+      const wpx = (p[tag].c / maxScore) * barMax;
+      svg('rect', { x, y: 10, width: Math.max(wpx, 1), height: 12, rx: 2, fill: css(col) }, g);
+      x += wpx;
+    }
+    g.onclick = () => select(id);
+  });
+  svg('text', { x: XF, y: rowY(R.order.length) + 14, 'font-size': 11, fill: css('--muted'),
+    text: `bar length = fused score (max ${maxScore.toFixed(4)})` }, stage);
+}
+
+function explain(R) {
+  const id = selected, p = R.parts[id];
+  $('#selname').textContent = `${id} — ${CHUNKS[id]}`;
+  if (!p) { $('#calc').textContent = `${id} is in neither candidate list → score 0, never returned.`; return; }
+  const term = (t, label, cls) => t
+    ? `<span class="${cls}">${label}: ${t.weight.toFixed(1)} / (${P.k} + ${t.rank}) = ${t.c.toFixed(5)}</span>`
+    : `<span class="${cls}">${label}: not in list → 0</span>`;
+  const pos = R.order.indexOf(id) + 1;
+  $('#calc').innerHTML = [term(p.lx, 'lexical ', 'lx'), term(p.sm, 'semantic', 'sm'),
+    `sum              = ${R.score[id].toFixed(5)}`, `fused rank ${pos}${R.top.includes(id) ? ' → returned' : ` → cut (top_k = ${P.topK})`}`].join('\n');
+}
+
+function narrate(R) {
+  const [w1, w2] = R.order;
+  const lex1 = R.lex[0], sem1 = R.sem[0];
+  let msg = `Winner: ${w1} (${R.score[w1].toFixed(4)}), runner-up ${w2} (${R.score[w2].toFixed(4)}). `;
+  if (w1 !== lex1 && w1 !== sem1) msg += `Neither list ranked ${w1} first — it wins by placing well in both.`;
+  else if (P.k <= 5) msg += `With k = ${P.k}, 1/(k+1) is huge next to 1/(k+2), so a #1 in either list dominates.`;
+  else msg += `${w1} was #1 in the ${w1 === lex1 ? 'lexical' : 'semantic'} list and also scored in the other.`;
+  if (Math.abs(R.score[w1] - R.score[w2]) < 1e-12) msg += ` Exact tie — broken by the better lexical rank.`;
+  $('#narration').textContent = msg;
+}
+
+function select(id) { selected = id; update(false); }
+function update(animate = true) { const R = fuse(P); draw(R, animate); explain(R); narrate(R); }
+
+/* ---- controls ---- */
+const C = $('#controls');
+const sK = slider(C, { label: 'rank constant k', min: 0, max: 100, value: P.k, onInput: v => { P.k = v; update(); } });
+const sW = slider(C, { label: 'semantic weight', min: 0.1, max: 5, step: 0.1, value: P.w, fmt: v => v.toFixed(1), onInput: v => { P.w = v; update(); } });
+const sD = slider(C, { label: 'candidate depth', min: 1, max: 8, value: 8, onInput: v => { P.depth = v; update(); } });
+const sT = slider(C, { label: 'top_k', min: 1, max: 8, value: P.topK, onInput: v => { P.topK = v; update(); } });
+P.depth = 8;
+function setP(k, w, depth, topK) {
+  Object.assign(P, { k, w, depth, topK });
+  for (const [s, v] of [[sK, k], [sW, w], [sD, depth], [sT, topK]]) { s.value = v; s.dispatchEvent(new Event('input')); }
+}
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => ({
+  default: () => setP(60, 1.0, 8, 5), k0: () => setP(0, 1.0, 8, 5),
+  sem3: () => setP(60, 3.0, 8, 5), shallow: () => setP(60, 1.0, 3, 3),
+})[b.dataset.p]());
+
+/* ---- editable raw scores (to prove they don't matter, as long as order holds) ---- */
+function rawTable() {
+  const t = $('#raw');
+  t.innerHTML = '<tr><th>chunk</th><th>BM25</th><th>cosine</th></tr>';
+  for (const id of Object.keys(CHUNKS)) {
+    const tr = document.createElement('tr');
+    const lx = LEX.find(r => r[0] === id), sm = SEM.find(r => r[0] === id);
+    tr.innerHTML = `<td>${id}</td><td class="num" contenteditable>${lx[1]}</td><td class="num" contenteditable>${sm[1]}</td>`;
+    const [cl, cs] = tr.querySelectorAll('td.num');
+    cl.oninput = () => { lx[1] = parseFloat(cl.textContent) || 0; LEX.sort((a, b) => b[1] - a[1]); update(); };
+    cs.oninput = () => { sm[1] = parseFloat(cs.textContent) || 0; SEM.sort((a, b) => b[1] - a[1]); update(); };
+    t.appendChild(tr);
+  }
+}
+rawTable();
+update(false);
+</script>
+</body>
+</html>
