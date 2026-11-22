@@ -145,12 +145,14 @@ function slider(parent, { label, min, max, step = 1, value, fmt = v => v, onInpu
 }
 /**
  * Stepper: play/pause/step/scrub through precomputed frames.
- * new Stepper(controlsEl, { frames, render(frame, i), speed: ms, autoplay })
+ * new Stepper(controlsEl, { frames, render(frame, i), speed: ms per step at 1×, autoplay, start })
+ *   start: index to open on, or 'end' to open on the finished state (never open on an empty stage).
+ *   Reading-heavy steps: autoplay:false and a larger speed (e.g. 3000).
  * Call .setFrames(newFrames) after the input changes. Space / ← / → keys are wired.
  */
 class Stepper {
-  constructor(root, { frames, render, speed = 700, autoplay = true }) {
-    Object.assign(this, { frames, render, speed, i: 0, timer: null });
+  constructor(root, { frames, render, speed = 1400, autoplay = true, start = 0 }) {
+    Object.assign(this, { frames, render, base: speed, i: 0, timer: null });
     const b = (txt, title, fn, cls = '') => {
       const el = Object.assign(document.createElement('button'), { textContent: txt, title, className: cls });
       el.addEventListener('click', fn); root.appendChild(el); return el;
@@ -164,8 +166,8 @@ class Stepper {
     root.appendChild(this.scrub);
     this.counter = document.createElement('output'); root.appendChild(this.counter);
     slider(root, { label: 'Speed', min: 1, max: 5, value: 3, fmt: v => v + '×',
-      onInput: v => { this.speed = 1400 / v; if (this.timer) { this.pause(); this.play(); } } });
-    this.speed = 1400 / 3;
+      onInput: v => { this.speed = this.base / v; if (this.timer) { this.pause(); this.play(); } } });
+    this.speed = this.base / 3;
     document.addEventListener('keydown', e => {
       if (e.target.matches('input[type=text], textarea')) return;
       if (e.code === 'Space') { e.preventDefault(); this.toggle(); }
@@ -173,6 +175,7 @@ class Stepper {
       if (e.code === 'ArrowLeft') { this.pause(); this.go(this.i - 1); }
     });
     this.setFrames(frames);
+    if (start) this.go(start === 'end' ? frames.length - 1 : start);
     if (autoplay && !matchMedia('(prefers-reduced-motion: reduce)').matches) this.play();
   }
   setFrames(frames) { this.frames = frames; this.scrub.max = frames.length - 1; this.go(0); }

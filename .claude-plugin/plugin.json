@@ -1,6 +1,6 @@
 {
   "name": "vizcon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Turn any concept you're trying to understand into an interactive, self-contained HTML visualization.",
   "keywords": [
     "visualization",

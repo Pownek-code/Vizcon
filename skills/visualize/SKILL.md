@@ -60,11 +60,14 @@ Hard rules:
   user edit them when that's cheap.
 - **Every visual change is narrated.** Colour, motion and highlights must be explained by the caption
   or a legend. Use colour to encode meaning consistently (one colour = one role across the page).
-- **Default state is already informative** — the page should teach something before any click, and
-  animations should auto-start or be one obvious click away.
+- **Default state is already informative.** The page should teach something before any click. Never
+  open on an empty stage: open on the finished state (`Stepper` option `start: 'end'`) or on a meaningful
+  step. Autoplay only short, visual steps; when each step has text to read, use `autoplay: false`.
 - **Accurate.** Compute with the real algorithm in JS rather than hard-coding frames, so any input the
   user types produces correct output. Double-check numbers shown against the math.
 - Keyboard: Space = play/pause, ←/→ = step (the template's `Stepper` wires this up).
+- **Stable stage size.** Size the stage for the largest state in the current frame set (e.g. the
+  tallest tree), not the current frame, so the controls below never jump while stepping.
 - Works at phone width; no horizontal scroll; respects `prefers-color-scheme` and `prefers-reduced-motion`.
 
 ## 4. Save, check, open
