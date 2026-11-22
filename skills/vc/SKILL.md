@@ -1,7 +1,7 @@
 ---
-name: visualize
-description: Build an interactive, self-contained HTML visualization that explains a concept — an algorithm, a data structure, a math idea, a system architecture, a protocol, a piece of code from the current project, or anything the user is trying to understand. Use when the user says "visualize", "show me", "draw", "animate", "help me see/picture/understand how X works", or runs /visualize. Produces one offline HTML file and opens it in the browser.
-argument-hint: "[concept to visualize — or leave empty to visualize what we're discussing]"
+name: vc
+description: Build an interactive, self-contained HTML visualization that explains a concept — an algorithm, a data structure, a math idea, a system architecture, a protocol, a piece of code from the current project, or anything the user is trying to understand. Use when the user says "visualize", "show me", "draw", "animate", "help me see/picture/understand how X works", or runs /vc. Produces one offline HTML page and shows it to the user right away, with no clicks needed (side panel in the Claude app, browser on a local machine).
+argument-hint: "[concept or question, or leave empty to visualize what we're discussing]"
 ---
 
 # Visualize a concept
@@ -70,30 +70,36 @@ Hard rules:
   tallest tree), not the current frame, so the controls below never jump while stepping.
 - Works at phone width; no horizontal scroll; respects `prefers-color-scheme` and `prefers-reduced-motion`.
 
-## 4. Save, check, open
+## 4. Save, check, show
 
-1. **Where to save**:
-   - Default: `~/.claude/visualizations/<kebab-case-concept>.html` (create the folder).
-   - In a cloud / remote session (the system prompt mentions a remote container, or the user can
-     only open files in the working directory or a scratchpad): save into the scratchpad directory if
-     one is listed, otherwise into `./visualizations/` in the working directory, and send it with
-     `SendUserFile` (display: `render`) if that tool exists.
+1. **Save** the page as `<kebab-case-concept>.html`:
+   - In a cloud / remote session (the system prompt mentions a remote container or a scratchpad
+     directory): in the scratchpad directory, or `./visualizations/` in the working directory if none is listed.
+   - Otherwise: `~/.claude/visualizations/` (create the folder).
    - If the user named a path, use it.
 2. **Check it** (do not skip): run
-   `node "${CLAUDE_PLUGIN_ROOT}/skills/visualize/scripts/check.js" <file>`
-   It loads the page headlessly, reports JS errors/console errors, and saves a screenshot next to the
-   file (`<name>.png`). If Playwright isn't available it says so and exits cleanly — then re-read your
-   JS carefully instead. **Look at the screenshot** (Read tool) and fix anything broken, cramped,
-   overlapping or empty, then re-check.
-3. **Open it**: `bash "${CLAUDE_PLUGIN_ROOT}/skills/visualize/scripts/open.sh" <file>` (opens the default
-   browser on macOS/Linux/Windows; silently does nothing on headless machines).
+   `node "${CLAUDE_PLUGIN_ROOT}/skills/vc/scripts/check.js" <file>`
+   It loads the page headlessly, reports JS errors/console errors, and saves screenshots next to the
+   file (`<name>.png`, `<name>.mobile.png`). If Playwright isn't available it says so and exits cleanly;
+   then re-read your JS carefully instead. **Look at the screenshots** (Read tool) and fix anything
+   broken, cramped, overlapping or empty, then re-check. Don't publish the screenshots.
+3. **Show it: the user must not have to click anything.** Use the first option that exists in this session:
+   1. **`Artifact` tool** (Claude app / claude.ai): publish the file with it: `file_path` = the page,
+      a one-word `icon` (e.g. `chart`, `diagram`, `tree`, `search`) and a one-sentence `description`.
+      The page opens in the side panel by itself and stays private to the user. The template already
+      meets the artifact page contract (2–4 word `<title>`, colour tokens with dark mode, body
+      background, phone width, no external scripts); keep it that way. When updating the same
+      visualization later, publish the **same file path** again so it keeps its URL.
+   2. **`SendUserFile` tool**: send the file with `display: "render"` and `status: "normal"`.
+   3. **Local machine**: `bash "${CLAUDE_PLUGIN_ROOT}/skills/vc/scripts/open.sh" <file>` opens it in
+      the default browser (macOS/Linux/WSL/Windows).
 
 If `${CLAUDE_PLUGIN_ROOT}` is unset (skill installed outside a plugin), use the directory this
 SKILL.md lives in.
 
 ## 5. Report back
 
-In chat, keep it short: the file path, one sentence on what the visualization shows, and 2–3 concrete
+In chat, keep it short: where it is (artifact link or file path), one sentence on what the visualization shows, and 2–3 concrete
 things to try. Offer to add a follow-up view (a deeper level, an edge case, a comparison). If the user
 asks follow-up questions about the concept, prefer **updating the same file** (new section, new mode)
 over making a new one, so the explainer grows with the conversation.

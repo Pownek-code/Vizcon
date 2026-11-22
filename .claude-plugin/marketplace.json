@@ -8,7 +8,7 @@
     {
       "name": "vizcon",
       "source": "./",
-      "description": "Interactive visual explainers for any concept, generated on demand with /visualize."
+      "description": "Interactive visual explainers for any concept, generated on demand with /vc."
     }
   ]
 }

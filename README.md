@@ -5,13 +5,15 @@ self-contained HTML visualization**: algorithms you can step through, parameters
 architectures you can explore. Works in any project, offline.
 
 ```
-/visualize how reciprocal rank fusion combines two rankings
-/visualize            # visualizes whatever you're discussing right now
+/vc binary search
+/vc how does a RAG pipeline work?
+/vc            # visualizes whatever you're discussing right now
 ```
 
 Or just ask in plain words ("show me how this works", "can you visualize that?").
 Claude picks the right visual form, builds the page from real data (your own code, when the
-concept lives in your project), checks it in a headless browser, and opens it.
+concept lives in your project), checks it in a headless browser, and shows it to you with no clicks: in the Claude app it opens
+in the side panel (as a private artifact); on your own machine it opens in your browser.
 
 ## Install (once, then it's in every session)
 
@@ -52,13 +54,13 @@ Every page has a one-line core insight, live narration, "what to notice" prompts
 check, and works in light and dark mode on phone and desktop. See [`examples/`](examples/).
 
 Pages are saved to `~/.claude/visualizations/` (or to the session scratchpad / `./visualizations/`
-in cloud sessions).
+in cloud sessions). If another installed plugin also has a `/vc` command, use `/vizcon:vc`.
 
 ## Layout
 
 ```
 .claude-plugin/          plugin + marketplace manifests
-skills/visualize/
+skills/vc/
   SKILL.md               how Claude designs and builds a visualization
   references/patterns.md recipes for each visual form
   assets/template.html   theme, layout and helper library (Stepper, slider, svg helpers)
