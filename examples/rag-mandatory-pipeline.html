@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- TODO: concept name, 2–4 words -->
+<title>RAG Mandatory Pipeline</title>
+<style>
+/* ---------- Theme tokens (keep) ---------- */
+:root {
+  --bg: #fbfaf8; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b72; --line: #e4e2dd;
+  --c1: #3b6fd8; --c2: #d9822b; --c3: #2e9e6b; --c4: #b04fc4; --c5: #c9a227;
+  --good: #2e9e6b; --bad: #d64545; --focus: #d9822b; --soft: #f1efea;
+  --radius: 12px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa3; --line: #2e2e33;
+    --c1: #6f9bf0; --c2: #f0a35a; --c3: #4cc48f; --c4: #cf7fe0; --c5: #e3c254;
+    --good: #4cc48f; --bad: #f07070; --focus: #f0a35a; --soft: #26262a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141416; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa3; --line: #2e2e33;
+  --c1: #6f9bf0; --c2: #f0a35a; --c3: #4cc48f; --c4: #cf7fe0; --c5: #e3c254;
+  --good: #4cc48f; --bad: #f07070; --focus: #f0a35a; --soft: #26262a; color-scheme: dark;
+}
+/* ---------- Layout (keep) ---------- */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); margin: 0 0 4px; letter-spacing: -0.01em; }
+.insight { font-size: 1.1rem; color: var(--muted); margin: 0 0 22px; max-width: 70ch; }
+.insight b { color: var(--ink); font-weight: 600; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.grid { display: grid; gap: 16px; align-items: start; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.stage { width: 100%; height: auto; display: block; overflow: visible; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 14px; }
+button { font: inherit; font-size: .92rem; background: var(--soft); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); min-width: 84px; }
+input[type=range] { accent-color: var(--focus); width: 160px; }
+input[type=text] { font: inherit; font-family: var(--mono); font-size: .9rem; padding: 6px 10px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+label { font-size: .9rem; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }
+output { font-family: var(--mono); color: var(--ink); min-width: 3ch; }
+.narration { margin-top: 14px; padding: 12px 14px; border-left: 3px solid var(--focus);
+  background: var(--soft); border-radius: 0 8px 8px 0; min-height: 3.2em; }
+h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+ul.notice { margin: 0; padding-left: 1.1em; } ul.notice li { margin: 4px 0; }
+.misconception { margin-top: 16px; border-left: 3px solid var(--bad); }
+.code { font-family: var(--mono); font-size: .82rem; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.code .ln { display: block; padding: 1px 8px; border-radius: 4px; }
+.code .ln.active { background: color-mix(in srgb, var(--focus) 22%, transparent); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .85rem; color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+svg text { fill: var(--ink); font-family: system-ui, sans-serif; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.pipe { display: grid; gap: 10px; }
+.lane { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lane-h { width: 100%; font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.lane-h code { text-transform: none; font-size: .8rem; color: var(--ink); background: var(--soft); padding: 1px 6px; border-radius: 4px; }
+.chip { border: 1.5px solid var(--line); background: var(--soft); border-radius: 999px; padding: 3px 11px; font-size: .85rem; cursor: pointer; white-space: nowrap; }
+.chip.done { border-color: var(--good); color: var(--good); }
+.chip.active { background: var(--focus); border-color: var(--focus); color: var(--bg); font-weight: 600; }
+.arrow { color: var(--muted); font-size: .85rem; }
+.knobs { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.knobs input[type=range] { width: 120px; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.seg button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+#q { width: min(420px, 100%); }
+.detail { margin-top: 16px; }
+.detail h3 { font-size: .95rem; margin: 14px 0 6px; }
+.detail h3:first-child { margin-top: 0; }
+.mono { font-family: var(--mono); font-size: .8rem; }
+.small { font-size: .83rem; color: var(--muted); }
+.file-row { display: grid; grid-template-columns: 1.6em minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: .88rem; }
+.file-row.skip { opacity: .45; }
+.badge { font-size: .72rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.badge.py { border-color: var(--c1); color: var(--c1); } .badge.doc { border-color: var(--c4); color: var(--c4); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tabs button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.src { font-family: var(--mono); font-size: .76rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 0; max-height: 420px; overflow: auto; }
+.src .k0 { background: color-mix(in srgb, var(--c1) 16%, transparent); }
+.src .k1 { background: color-mix(in srgb, var(--c2) 18%, transparent); }
+.src .cut { display: inline-block; width: 0; border-left: 2.5px solid var(--ink); height: 1.15em; vertical-align: -0.25em; margin: 0 1px; position: relative; }
+.src .cut.fb { border-left-style: dashed; border-left-color: var(--bad); }
+.src .cut b { position: absolute; top: -1.05em; left: 2px; font-size: .62rem; font-weight: 700; color: var(--muted); background: var(--panel); padding: 0 2px; border-radius: 3px; white-space: nowrap; }
+.src .pref { display: inline-block; width: 0; border-left: 2px dotted var(--c3); height: 1em; vertical-align: -0.2em; }
+.src mark { background: color-mix(in srgb, var(--good) 30%, transparent); color: inherit; }
+table.t { width: 100%; border-collapse: collapse; font-size: .84rem; }
+table.t th { text-align: left; font-weight: 600; color: var(--muted); font-size: .76rem; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+table.t td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.t td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+table.t tr.sel td { background: color-mix(in srgb, var(--focus) 14%, transparent); }
+table.t tr.dim td { opacity: .4; }
+table.t tr.click { cursor: pointer; }
+.tok { display: inline-block; font-family: var(--mono); font-size: .76rem; padding: 1px 6px; margin: 2px; border-radius: 5px; background: var(--soft); border: 1px solid var(--line); }
+.tok.id { border-color: var(--c1); }
+.tok.part { border-style: dashed; border-color: var(--c1); }
+.tok.stop { text-decoration: line-through; opacity: .45; }
+.tok.q { color: var(--bg); border: none; }
+.json { font-family: var(--mono); font-size: .78rem; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 8px; padding: 10px 12px; margin: 0; }
+.prompt { font-family: var(--mono); font-size: .76rem; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 8px; padding: 12px; margin: 0; line-height: 1.5; }
+.prompt .sys { color: var(--muted); }
+.prompt .hdr { color: var(--c1); font-weight: 700; }
+.prompt .q { background: color-mix(in srgb, var(--focus) 25%, transparent); border-radius: 3px; }
+.prompt .tr { color: var(--bad); font-weight: 700; }
+.meter { height: 12px; border-radius: 6px; background: var(--soft); border: 1px solid var(--line); display: flex; overflow: hidden; margin: 6px 0 2px; }
+.meter i { display: block; height: 100%; }
+.answer { border: 1.5px solid var(--good); border-radius: 12px; padding: 12px 14px; font-size: 1rem; }
+.answer.bad { border-color: var(--bad); }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: .86rem; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); font-size: .8rem; }
+.bars .row { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr) 4.2em; gap: 8px; align-items: center; padding: 3px 0; cursor: pointer; font-size: .8rem; }
+.bars .row.sel { background: color-mix(in srgb, var(--focus) 12%, transparent); border-radius: 6px; }
+.bars .row.cut { opacity: .38; }
+.bars .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: .74rem; }
+.bars .bar { height: 14px; display: flex; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.bars .num { font-family: var(--mono); text-align: right; font-size: .76rem; }
+.topk-line { border-top: 2px dashed var(--good); margin: 4px 0; position: relative; }
+.topk-line span { position: absolute; right: 0; top: -0.75em; font-size: .7rem; color: var(--good); background: var(--panel); padding: 0 4px; }
+.calc { font-family: var(--mono); font-size: .78rem; white-space: pre-wrap; background: var(--soft); border-radius: 8px; padding: 10px 12px; margin: 8px 0 0; line-height: 1.6; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 640px) { .two { grid-template-columns: minmax(0, 1fr); } .bars .row { grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3.6em; } }
+.narration { min-height: 4.6em; }
+.qbubble { border: 1.5px solid var(--focus); border-radius: 14px 14px 14px 4px; padding: 10px 14px; display: inline-block; }
+.note { font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); margin-top: 18px; padding-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RAG Against the Machine</h1>
+  <p class="insight">Your pipeline never hands the vLLM repo to Qwen. It cuts files into <b>≤ 2,000-character chunks
+    that remember their file and character range</b>, BM25 ranks them by shared rare terms, and only the
+    <b>top-k ranges, re-read from disk,</b> go into a token-budgeted prompt.</p>
+
+  <div class="grid">
+    <section class="card">
+      <div class="pipe" id="pipe"></div>
+      <div class="controls" id="controls"></div>
+      <div class="narration" id="narration" aria-live="polite"></div>
+      <div class="knobs">
+        <span class="small">Question</span><span class="seg" id="qs"></span>
+        <input type="text" id="q" aria-label="Question">
+      </div>
+      <div class="knobs" id="knobs"></div>
+      <div class="detail" id="detail"></div>
+      <p class="note">Files: a <b>miniature, made-up corpus</b> shaped like vLLM (the real repo is far too big to
+        show). The chunking, tokenizing, BM25 ranking, top-k, prompt building and Recall@k are your code's
+        algorithms re-implemented here, and checked against your actual Python for these files. Equal scores may be listed in a different order than bm25s, which breaks ties arbitrarily. Not reproduced:
+        Qwen's real token counts (estimated as ≈ characters ÷ 3.6) and Qwen's answers (illustrative).</p>
+    </section>
+
+    <aside>
+      <section class="card">
+        <h2>What to notice</h2>
+        <ul class="notice">
+          <li><b>Chunk:</b> drag the max size down. Python cuts land after a <code>def</code>/<code>class</code>,
+            docs cuts at headings and blank lines; when nothing fits, it falls back to a line break (red).</li>
+          <li><b>Tokenize:</b> <code>block_size</code> becomes <code>block_siz</code> + <code>block</code> + <code>size</code>, so
+            both "block_size" and "block size" match.</li>
+          <li><b>Chunk README.md at 400:</b> the <code>## Quark</code> heading lands at the <i>end of chunk 1</i>, because the
+            blank line after it is a farther boundary. Chunk 2 is still found for "Quark" thanks to its heading path
+            <i>Quantization Quark</i>, which is indexed with it (see <b>Score</b>).</li>
+          <li><b>Top-k:</b> type just <code>vllm</code>. It's a stop word, so nothing scores, and you still get k results.</li>
+        </ul>
+      </section>
+      <section class="card misconception">
+        <h2>You might think…</h2>
+        <p style="margin:0">…that the index hands Qwen the text it found. It doesn't: <code>search</code> returns only
+          <b>file path + character range</b> (that's what the grader scores). <code>answer</code> then re-opens each
+          file and slices <code>text[first:last]</code>, which is why the loader keeps line endings exactly as written.</p>
+      </section>
+      <section class="card" style="margin-top:16px">
+        <h2>Left out (bonus)</h2>
+        <ul class="notice small">
+          <li>Semantic index (<code>e5-small-v2</code>, <code>vector_index.py</code>)</li>
+          <li>Hybrid RRF fusion (<code>hybrid_search.py</code>)</li>
+          <li>HTTP API (<code>api.py</code>)</li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script>
+/* =================== Helper library (keep) =================== */
+const $ = (s, r = document) => r.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+/** Create an SVG element: svg('rect', {x:0, y:0, width:10}, parent) */
+function svg(tag, attrs = {}, parent) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) k === 'text' ? (el.textContent = v) : el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+/** Pointer position in an SVG's own coordinates (for dragging). */
+function svgPoint(svgEl, evt) {
+  const p = svgEl.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY;
+  return p.matrixTransform(svgEl.getScreenCTM().inverse());
+}
+/** Read a CSS colour token, e.g. css('--focus') */
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/** Labelled range slider. Returns the <input>. onInput(value) fires live. */
+function slider(parent, { label, min, max, step = 1, value, fmt = v => v, onInput }) {
+  const wrap = document.createElement('label');
+  wrap.textContent = label + ' ';
+  const inp = Object.assign(document.createElement('input'), { type: 'range', min, max, step, value });
+  const out = document.createElement('output'); out.textContent = fmt(+value);
+  inp.addEventListener('input', () => { out.textContent = fmt(+inp.value); onInput(+inp.value); });
+  wrap.append(inp, out); parent.appendChild(wrap);
+  return inp;
+}
+/**
+ * Stepper: play/pause/step/scrub through precomputed frames.
+ * new Stepper(controlsEl, { frames, render(frame, i), speed: ms per step at 1×, autoplay, start })
+ *   start: index to open on, or 'end' to open on the finished state (never open on an empty stage).
+ *   Reading-heavy steps: autoplay:false and a larger speed (e.g. 3000).
+ * Call .setFrames(newFrames) after the input changes. Space / ← / → keys are wired.
+ */
+class Stepper {
+  constructor(root, { frames, render, speed = 1400, autoplay = true, start = 0 }) {
+    Object.assign(this, { frames, render, base: speed, i: 0, timer: null });
+    const b = (txt, title, fn, cls = '') => {
+      const el = Object.assign(document.createElement('button'), { textContent: txt, title, className: cls });
+      el.addEventListener('click', fn); root.appendChild(el); return el;
+    };
+    b('⏮', 'Restart', () => { this.pause(); this.go(0); });
+    b('◀', 'Step back (←)', () => { this.pause(); this.go(this.i - 1); });
+    this.playBtn = b('▶ Play', 'Play / pause (Space)', () => this.toggle(), 'primary');
+    b('▶|', 'Step forward (→)', () => { this.pause(); this.go(this.i + 1); });
+    this.scrub = Object.assign(document.createElement('input'), { type: 'range', min: 0, value: 0, title: 'Scrub' });
+    this.scrub.addEventListener('input', () => { this.pause(); this.go(+this.scrub.value); });
+    root.appendChild(this.scrub);
+    this.counter = document.createElement('output'); root.appendChild(this.counter);
+    slider(root, { label: 'Speed', min: 1, max: 5, value: 3, fmt: v => v + '×',
+      onInput: v => { this.speed = this.base / v; if (this.timer) { this.pause(); this.play(); } } });
+    this.speed = this.base / 3;
+    document.addEventListener('keydown', e => {
+      if (e.target.matches('input[type=text], textarea')) return;
+      if (e.code === 'Space') { e.preventDefault(); this.toggle(); }
+      if (e.code === 'ArrowRight') { this.pause(); this.go(this.i + 1); }
+      if (e.code === 'ArrowLeft') { this.pause(); this.go(this.i - 1); }
+    });
+    this.setFrames(frames);
+    if (start) this.go(start === 'end' ? frames.length - 1 : start);
+    if (autoplay && !matchMedia('(prefers-reduced-motion: reduce)').matches) this.play();
+  }
+  setFrames(frames) { this.frames = frames; this.scrub.max = frames.length - 1; this.go(0); }
+  go(i) {
+    this.i = Math.max(0, Math.min(this.frames.length - 1, i));
+    this.scrub.value = this.i; this.counter.textContent = `${this.i + 1}/${this.frames.length}`;
+    this.render(this.frames[this.i], this.i);
+  }
+  play() {
+    if (this.i >= this.frames.length - 1) this.go(0);
+    this.playBtn.textContent = '⏸ Pause';
+    this.timer = setInterval(() => { this.i >= this.frames.length - 1 ? this.pause() : this.go(this.i + 1); }, this.speed);
+  }
+  pause() { clearInterval(this.timer); this.timer = null; this.playBtn.textContent = '▶ Play'; }
+  toggle() { this.timer ? this.pause() : this.play(); }
+}
+/** Render pseudocode lines into <pre>, returns highlight(lineIndex). */
+function codePanel(pre, lines) {
+  pre.innerHTML = '';
+  const els = lines.map(l => { const s = document.createElement('span'); s.className = 'ln'; s.textContent = l; pre.appendChild(s); return s; });
+  return idx => els.forEach((el, j) => el.classList.toggle('active', j === idx));
+}
+
+const FILES = [{"path": "data/raw/vllm-0.10.1/csrc/attention/attention_kernels.cu", "type": null, "content": null}, {"path": "data/raw/vllm-0.10.1/docs/assets/logo.png", "type": null, "content": null}, {"path": "data/raw/vllm-0.10.1/docs/features/quantization/README.md", "type": "documentation", "content": "# Quantization\n\nQuantization trades off model precision for a smaller memory footprint,\nallowing large models to run on a wider range of devices.\n\n## Supported Methods\n\nvLLM supports AWQ, GPTQ and FP8 quantization. Pass the method with\nthe `quantization` argument when creating the engine.\n\n## Quark\n\nQuark is AMD's quantization toolkit. Load a Quark checkpoint with\n`quantization=\"quark\"`; the scales are read from the checkpoint.\n"}, {"path": "data/raw/vllm-0.10.1/docs/serving/offline_inference.md", "type": "documentation", "content": "# Offline Inference\n\nUse the `LLM` class to run inference without starting a server.\n\n## Context length\n\nSet `max_model_len` to limit the context length. If it is not set,\nvLLM reads it from the model config. Lower it when the KV cache does\nnot fit in GPU memory.\n"}, {"path": "data/raw/vllm-0.10.1/requirements/common.txt", "type": "documentation", "content": "numpy\ntransformers >= 4.55.0\ntokenizers >= 0.21.1\nsafetensors\n"}, {"path": "data/raw/vllm-0.10.1/vllm/config.py", "type": "python", "content": "\"\"\"Configuration for the vLLM engine.\"\"\"\n\nimport enum\n\n\nclass LoadFormat(str, enum.Enum):\n    AUTO = \"auto\"\n    SAFETENSORS = \"safetensors\"\n    DUMMY = \"dummy\"\n\n\nclass ModelConfig:\n    \"\"\"Configuration for the model.\"\"\"\n\n    def __init__(self, model: str, max_model_len: int | None = None,\n                 dtype: str = \"auto\") -> None:\n        self.model = model\n        self.dtype = dtype\n        self.max_model_len = max_model_len\n\n    def get_max_model_len(self) -> int:\n        \"\"\"Return the maximum context length in tokens.\"\"\"\n        if self.max_model_len is None:\n            return 4096\n        return self.max_model_len\n\n\nclass CacheConfig:\n    \"\"\"Configuration for the KV cache.\"\"\"\n\n    def __init__(self, block_size: int = 16,\n                 gpu_memory_utilization: float = 0.9) -> None:\n        self.block_size = block_size\n        self.gpu_memory_utilization = gpu_memory_utilization\n"}];
+const STEMS = {"0": "0", "1": "1", "10": "10", "16": "16", "21": "21", "4": "4", "4096": "4096", "55": "55", "8": "8", "9": "9", "__init__": "__init__", "a": "a", "allowing": "allow", "amd": "amd", "an": "an", "and": "and", "are": "are", "argument": "argument", "arguments": "argument", "as": "as", "attention": "attent", "auto": "auto", "awq": "awq", "batch": "batch", "batching": "batch", "be": "be", "block": "block", "block_size": "block_siz", "by": "by", "cache": "cach", "cacheconfig": "cacheconfig", "caching": "cach", "can": "can", "change": "chang", "changes": "chang", "changing": "chang", "checkpoint": "checkpoint", "checkpoints": "checkpoint", "class": "class", "classes": "class", "common": "common", "common.txt": "common.txt", "config": "config", "config.py": "config.pi", "configuration": "configur", "configure": "configur", "context": "context", "creating": "creat", "data": "data", "def": "def", "default": "default", "defaults": "default", "device": "devic", "devices": "devic", "do": "do", "docs": "doc", "does": "doe", "dtype": "dtype", "dummy": "dummi", "engine": "engin", "enum": "enum", "enum.enum": "enum.enum", "fast": "fast", "faster": "faster", "features": "featur", "file": "file", "files": "file", "fit": "fit", "fits": "fit", "float": "float", "footprint": "footprint", "for": "for", "format": "format", "formats": "format", "fp": "fp", "fp8": "fp8", "from": "from", "function": "function", "functions": "function", "get": "get", "get_max_model_len": "get_max_model_len", "gptq": "gptq", "gpu": "gpu", "gpu_memory_utilization": "gpu_memory_util", "gpus": "gpus", "how": "how", "i": "i", "if": "if", "import": "import", "in": "in", "inference": "infer", "init": "init", "int": "int", "is": "is", "it": "it", "its": "it", "kernel": "kernel", "kernels": "kernel", "kv": "kv", "large": "larg", "len": "len", "length": "length", "lengths": "length", "limit": "limit", "limiting": "limit", "limits": "limit", "llm": "llm", "load": "load", "loaded": "load", "loadformat": "loadformat", "loading": "load", "loads": "load", "lower": "lower", "max": "max", "max_model_len": "max_model_len", "maximum": "maximum", "md": "md", "memory": "memori", "method": "method", "methods": "method", "model": "model", "modelconfig": "modelconfig", "models": "model", "none": "none", "not": "not", "numpy": "numpi", "of": "of", "off": "off", "offline": "offlin", "offline_inference.md": "offline_inference.md", "on": "on", "option": "option", "options": "option", "paged": "page", "parameter": "paramet", "parameters": "paramet", "pass": "pass", "precision": "precis", "py": "py", "quantization": "quantiz", "quantize": "quantiz", "quantized": "quantiz", "quark": "quark", "range": "rang", "raw": "raw", "read": "read", "reading": "read", "readme": "readm", "readme.md": "readme.md", "reads": "read", "request": "request", "requests": "request", "requirements": "requir", "return": "return", "returns": "return", "run": "run", "running": "run", "runs": "run", "s": "s", "safetensors": "safetensor", "scale": "scale", "scales": "scale", "self": "self", "self.block_size": "self.block_s", "self.dtype": "self.dtyp", "self.gpu_memory_utilization": "self.gpu_memory_util", "self.max_model_len": "self.max_model_len", "self.model": "self.model", "server": "server", "serving": "serv", "set": "set", "setter": "setter", "setting": "set", "size": "size", "slow": "slow", "slower": "slower", "smaller": "smaller", "speed": "speed", "starting": "start", "str": "str", "support": "support", "supported": "support", "supports": "support", "that": "that", "the": "the", "their": "their", "there": "there", "this": "this", "to": "to", "token": "token", "tokenizer": "token", "tokenizers": "token", "tokens": "token", "toolkit": "toolkit", "trades": "trade", "transformers": "transform", "txt": "txt", "type": "type", "types": "type", "use": "use", "used": "use", "utilization": "util", "v": "v", "value": "valu", "values": "valu", "vllm": "vllm", "what": "what", "when": "when", "where": "where", "which": "which", "who": "who", "whom": "whom", "why": "whi", "wider": "wider", "with": "with", "without": "without", "you": "you"};
+const STOP = new Set(["a", "an", "are", "as", "be", "by", "can", "do", "doe", "does", "for", "from", "how", "i", "in", "is", "it", "its", "of", "on", "that", "the", "their", "there", "this", "to", "use", "used", "vllm", "what", "when", "where", "whi", "which", "who", "whom", "why", "with", "you"]);
+/* =================== Port of the mandatory pipeline (src/…) =================== */
+const MAX_CHUNK_SIZE = 2000, K1 = 1.5, B = 0.75, MIN_IOU = 0.05;
+const DOCS = FILES.filter(f => f.type);           // RepositoryLoader keeps .py/.md/.txt, sorted by path
+const short = p => p.replace('data/raw/vllm-0.10.1/', '');
+
+/* ---- chunking.py ---- */
+function lineEnds(text) { const o = []; let i = 0; for (const l of text.split(/(?<=\n)/)) { i += l.length; o.push(i); } return o; }
+function pythonBoundaries(text) {                 // PythonChunker: end of every def / async def / class (ast end_lineno)
+  const lines = text.split(/(?<=\n)/), ends = lineEnds(text), out = new Map();
+  lines.forEach((ln, i) => {
+    const m = ln.match(/^(\s*)(async\s+def|def|class)\s+([A-Za-z_]\w*)/); if (!m) return;
+    const ind = m[1].length; let last = i;
+    for (let j = i + 1; j < lines.length; j++) {
+      if (!lines[j].trim()) continue;
+      if (lines[j].match(/^\s*/)[0].length <= ind) break;
+      last = j;
+    }
+    out.set(ends[last], `end of ${m[2].includes('class') ? 'class' : 'def'} ${m[3]}`);
+  });
+  return out;
+}
+function docBoundaries(text) {                    // DocumentationChunker: heading starts + end of blank lines
+  const out = new Map();
+  for (const m of text.matchAll(/^[ \t]{0,3}#{1,6}[ \t]+.+$/gm)) out.set(m.index, 'before a heading');
+  for (const m of text.matchAll(/\r?\n[ \t]*\r?\n/g)) if (!out.has(m.index + m[0].length)) out.set(m.index + m[0].length, 'after a blank line');
+  return out;
+}
+function docContext(text) {                       // heading path in force at each position
+  const pos = [], paths = []; let titles = {};
+  for (const m of text.matchAll(/^[ \t]{0,3}(#{1,6})[ \t]+(.+?)[ \t]*$/gm)) {
+    const lvl = m[1].length; const t = {}; for (const [l, v] of Object.entries(titles)) if (+l < lvl) t[l] = v;
+    t[lvl] = m[2].trim(); titles = t; pos.push(m.index);
+    paths.push(Object.keys(titles).map(Number).sort((a, b) => a - b).map(l => titles[l]).join(' '));
+  }
+  return start => { let i = -1; for (let j = 0; j < pos.length; j++) if (pos[j] <= start) i = j; return i >= 0 ? paths[i] : ''; };
+}
+function chunkDoc(doc, max) {
+  const text = doc.content, n = text.length;
+  const pref = doc.type === 'python' ? pythonBoundaries(text) : docBoundaries(text);
+  const bounds = [...new Set([...pref.keys()].filter(b => b > 0 && b <= n).concat([n]))].sort((a, b) => a - b);
+  const ctx = doc.type === 'python' ? () => '' : docContext(text);
+  const chunks = []; let start = 0;
+  while (start < n) {
+    const maxEnd = Math.min(start + max, n);
+    const fits = bounds.filter(b => b > start && b <= maxEnd);
+    let end, how;
+    if (fits.length) { end = fits[fits.length - 1]; how = end === n ? 'end of file' : pref.get(end); }
+    else if (maxEnd === n) { end = n; how = 'end of file'; }
+    else { const nl = text.lastIndexOf('\n', maxEnd - 1); if (nl > start) { end = nl + 1; how = 'line-break fallback'; } else { end = maxEnd; how = 'hard cut'; } }
+    chunks.push({ file: doc.path, type: doc.type, first: start, last: end, content: text.slice(start, end), context: ctx(start), how });
+    start = end;
+  }
+  return { chunks, pref };
+}
+
+/* ---- tokenization.py: CodeAwareTokenizer ("code-aware-v3") ---- */
+function splitIdentifiers(text) {
+  const out = [];
+  for (const tok of text.match(/[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*|\d+/g) || []) {
+    const low = tok.toLowerCase(); out.push({ w: low, kind: 'id' });
+    for (const part of tok.split(/[._]+/))
+      for (const w of part.match(/[A-Z]+(?=[A-Z][a-z]|\d|\b)|[A-Z]?[a-z]+|[A-Z]+|\d+/g) || [])
+        if (w.toLowerCase() !== low) out.push({ w: w.toLowerCase(), kind: 'part' });
+  }
+  return out;
+}
+const stem = w => STEMS[w] ?? w;
+function tokenizeDetailed(text) {
+  const items = splitIdentifiers(text).map(x => ({ ...x, s: stem(x.w) }));
+  items.forEach(x => x.stop = STOP.has(x.s));
+  const meaningful = items.filter(x => !x.stop);
+  if (!meaningful.length) items.forEach(x => x.stop = false);   // "unless that would leave nothing"
+  return items;
+}
+const tokenize = text => tokenizeDetailed(text).filter(x => !x.stop).map(x => x.s);
+
+/* ---- models.SourceChunk.searchable_text ---- */
+const searchable = c => `${c.file}\n${c.context}\n${c.content}`;
+
+/* ---- indexing.py: BM25Index via bm25s (Lucene variant) ---- */
+function buildIndex(chunks) {
+  const sorted = [...chunks].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : a.first - b.first);
+  const docs = sorted.map(c => tokenize(searchable(c)));
+  const N = docs.length, avgdl = docs.reduce((s, d) => s + d.length, 0) / N, df = {};
+  docs.forEach(d => new Set(d).forEach(t => df[t] = (df[t] || 0) + 1));
+  const idf = t => Math.log(1 + (N - df[t] + 0.5) / (df[t] + 0.5));
+  return { chunks: sorted, docs, N, avgdl, df, idf };
+}
+function score(ix, qTokens) {
+  return ix.docs.map((d, i) => {
+    const dl = d.length, parts = [];
+    for (const t of qTokens) {
+      if (!ix.df[t]) { parts.push({ t, tf: 0, idf: 0, s: 0 }); continue; }
+      const tf = d.filter(x => x === t).length, idf = ix.idf(t);
+      parts.push({ t, tf, idf, dl, s: tf ? idf * tf / (K1 * (1 - B + B * dl / ix.avgdl) + tf) : 0 });
+    }
+    return { i, chunk: ix.chunks[i], total: parts.reduce((s, p) => s + p.s, 0), parts };
+  });
+}
+function search(ix, query, k) {
+  const q = tokenize(query); if (!q.length) return { q, ranked: [], top: [] };
+  const ranked = score(ix, q).sort((a, b) => b.total - a.total || a.i - b.i);   // ties: bm25s order is arbitrary
+  return { q, ranked, top: ranked.slice(0, Math.min(k, ix.N)) };
+}
+
+/* ---- prompting.py: PromptBuilder ---- */
+const SYSTEM_PROMPT = "You answer questions about the vLLM codebase using the numbered context excerpts provided by the user. Base your answer on the excerpts and do not invent file names, functions, options or values. Answer concisely, and cite the excerpts you rely on with their numbers, for example [1]. Only if the excerpts contain nothing relevant to the question, say that the context does not cover it.";
+const TRUNC = '\n[... truncated ...]';
+const countTokens = s => Math.ceil(s.length / 3.6);       // page estimate; the real code uses Qwen's tokenizer
+function fit(text, budget) {
+  if (countTokens(text) <= budget) return { body: text, cut: false };
+  let lo = 0, hi = text.length;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (countTokens(text.slice(0, mid) + TRUNC) <= budget) lo = mid; else hi = mid - 1; }
+  return { body: text.slice(0, lo), cut: true };
+}
+function buildPrompt(question, excerpts, maxTokens) {
+  let remaining = maxTokens; const blocks = [];
+  for (const [n, ex] of excerpts.entries()) {
+    const header = `[${n + 1}] ${ex.file} (characters ${ex.first}-${ex.last})\n`;
+    const budget = remaining - countTokens(header); if (budget <= 0) break;
+    const f = fit(ex.content, budget); const text = header + f.body + (f.cut ? TRUNC : '');
+    blocks.push({ header, body: f.body, cut: f.cut, tokens: countTokens(text) }); remaining -= countTokens(text);
+    if (remaining <= 0) break;
+  }
+  return { blocks, dropped: excerpts.length - blocks.length, used: maxTokens - remaining };
+}
+
+/* ---- evaluation.py: RetrievalEvaluator ---- */
+function iou(a, b) {
+  const inter = Math.max(0, Math.min(a.last, b.last) - Math.max(a.first, b.first));
+  return inter ? inter / ((a.last - a.first) + (b.last - b.first) - inter) : 0;
+}
+
+/* =================== Presets =================== */
+const fileOf = s => DOCS.find(d => d.path.endsWith(s));
+const ref = (file, from, to) => { const d = fileOf(file), a = d.content.indexOf(from); return { file: d.path, first: a, last: to ? d.content.indexOf(to, a) : d.content.length }; };
+const PRESETS = [
+  { q: 'How do I limit the maximum context length of a model?', ref: ref('offline_inference.md', '## Context length'),
+    good: 'Set `max_model_len` to limit the context length; if it is not set, vLLM reads it from the model config [1].' },
+  { q: 'How do I load a Quark quantized checkpoint?', ref: ref('quantization/README.md', '## Quark'),
+    good: 'Load it with `quantization="quark"`; the scales are read from the checkpoint [1].' },
+  { q: 'What is the default block_size of the KV cache?', ref: ref('vllm/config.py', 'class CacheConfig'),
+    good: 'The default `block_size` is 16, set in `CacheConfig.__init__` [1].' },
+];
+const S = { preset: 0, query: PRESETS[0].q, max: 400, k: 5, budget: 2500, file: 0, chunk: null, sel: null };
+/* =================== Stages =================== */
+const STAGES = [
+  { lane: 0, name: 'Load files' }, { lane: 0, name: 'Chunk' }, { lane: 0, name: 'Tokenize' }, { lane: 0, name: 'BM25 index' },
+  { lane: 1, name: 'Tokenize question' }, { lane: 1, name: 'Score' }, { lane: 1, name: 'Top-k sources' },
+  { lane: 1, name: 'Re-read excerpts' }, { lane: 1, name: 'Prompt' }, { lane: 1, name: 'Qwen3-0.6B' },
+  { lane: 2, name: 'Recall@k' },
+];
+const LANES = ['① <code>index</code>: once, ahead of time', '② <code>search</code> → <code>answer</code>: per question', '③ <code>evaluate</code>: against reference answers'];
+const chips = [];
+(() => {
+  const pipe = $('#pipe');
+  LANES.forEach((h, lane) => {
+    const row = document.createElement('div'); row.className = 'lane'; row.innerHTML = `<div class="lane-h">${h}</div>`;
+    STAGES.forEach((st, i) => { if (st.lane !== lane) return;
+      if (row.querySelector('.chip')) row.insertAdjacentHTML('beforeend', '<span class="arrow">→</span>');
+      const c = document.createElement('span'); c.className = 'chip'; c.textContent = st.name; c.onclick = () => stepper.go(i);
+      row.appendChild(c); chips[i] = c; });
+    pipe.appendChild(row);
+  });
+})();
+
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const TERM_COLORS = ['--c1', '--c2', '--c3', '--c4', '--c5', '--focus'];
+let P = null;   // computed pipeline for current knobs
+function compute() {
+  const per = DOCS.map(d => chunkDoc(d, S.max));
+  const ix = buildIndex(per.flatMap(p => p.chunks));
+  const res = search(ix, S.query, S.k);
+  const preset = PRESETS.find(p => p.q === S.query.trim()) || null;
+  const excerpts = res.top.map(r => { const c = r.chunk, d = DOCS.find(x => x.path === c.file);
+    return { file: c.file, first: c.first, last: c.last, content: d.content.slice(c.first, c.last) }; });
+  const prompt = buildPrompt(S.query, excerpts, S.budget);
+  P = { per, ix, res, preset, excerpts, prompt };
+}
+
+function render(_, i) {
+  compute();
+  chips.forEach((c, j) => c.className = 'chip' + (j === i ? ' active' : j < i ? ' done' : ''));
+  const [html, msg] = VIEWS[i]();
+  $('#detail').innerHTML = html;
+  $('#narration').innerHTML = `<b>Step ${i + 1} · ${STAGES[i].name}:</b> ${msg}`;
+  (WIRE[i] || (() => {}))();
+}
+
+const VIEWS = [
+/* 1 load */ () => {
+  const rows = FILES.map(f => { const ext = f.path.match(/\.\w+$/)[0];
+    return `<div class="file-row ${f.type ? '' : 'skip'}"><span>${f.type ? '✓' : '✗'}</span><span class="mono">${esc(f.path)}</span>
+      ${f.type ? `<span class="badge ${f.type === 'python' ? 'py' : 'doc'}">${f.type === 'python' ? 'PYTHON' : 'DOCUMENTATION'} · ${f.content.length} chars</span>` : `<span class="badge">${ext} not ingested</span>`}</div>`; }).join('');
+  return [`<h3>RepositoryLoader.load("data/raw/vllm-0.10.1")</h3>${rows}
+    <p class="small">Only <code>.py</code> → PYTHON and <code>.md</code>/<code>.txt</code> → DOCUMENTATION are kept (<code>file_types.py</code>).
+    Symlinks, unreadable and empty files are skipped. Files are read with <code>newline=""</code>, so <b>line endings stay exactly as written</b>
+    and every character offset later points at the right place. Paths are stored relative to the project root.</p>`,
+    `Walk the repo in sorted order and keep ${DOCS.length} of ${FILES.length} files. The CUDA kernel and the PNG are dropped by extension.`];
+},
+/* 2 chunk */ () => {
+  const d = DOCS[S.file], { chunks, pref } = P.per[S.file], text = d.content;
+  const cuts = new Map(chunks.slice(0, -1).map((c, j) => [c.last, { j: j + 1, fb: /fallback|hard/.test(c.how) }]));
+  let out = '', cur = 0;
+  const marks = [...new Set([...pref.keys(), ...cuts.keys()])].filter(x => x > 0 && x < text.length).sort((a, b) => a - b);
+  const kIdx = pos => chunks.findIndex(c => pos >= c.first && pos < c.last) % 2;
+  for (const m of [...marks, text.length]) {
+    if (m > cur) out += `<span class="k${kIdx(cur)}">${esc(text.slice(cur, m))}</span>`;
+    if (cuts.has(m)) out += `<span class="cut ${cuts.get(m).fb ? 'fb' : ''}"><b>${m}</b></span>`;
+    else if (pref.has(m)) out += '<span class="pref"></span>';
+    cur = m;
+  }
+  const tabs = DOCS.map((x, j) => `<button data-file="${j}" class="${j === S.file ? 'on' : ''}">${esc(short(x.path).split('/').pop())}</button>`).join('');
+  const tbl = chunks.map((c, j) => `<tr><td>${j + 1}</td><td class="num">${c.first}–${c.last}</td><td class="num">${c.last - c.first}</td>
+    <td>${esc(c.how)}</td><td class="small">${esc(c.context) || '—'}</td></tr>`).join('');
+  const fb = chunks.filter(c => /fallback|hard/.test(c.how)).length;
+  return [`<div class="tabs">${tabs}</div>
+    <div class="legend" style="margin:0 0 8px"><span><i style="border-left:2.5px solid var(--ink);width:0;border-radius:0"></i>cut (number = character offset)</span>
+      <span><i style="border-left:2px dotted var(--c3);width:0;border-radius:0"></i>preferred boundary not used</span>
+      <span><i style="border-left:2.5px dashed var(--bad);width:0;border-radius:0"></i>fallback cut</span></div>
+    <pre class="src">${out}</pre>
+    <h3>${chunks.length} chunk${chunks.length > 1 ? 's' : ''} · ${d.type === 'python' ? 'PythonChunker' : 'DocumentationChunker'} · max ${S.max} chars</h3>
+    <table class="t"><tr><th>#</th><th>range [first, last)</th><th>len</th><th>ended because</th><th>context (heading path)</th></tr>${tbl}</table>
+    <p class="small">Each chunk ends at the <b>farthest preferred boundary that keeps it ≤ max</b>. ${d.type === 'python'
+      ? 'Python boundaries = the line after every <code>def</code>/<code>class</code> ends (found with <code>ast</code>).'
+      : 'Doc boundaries = heading starts and the end of every blank line. Each chunk also gets its heading path as <i>context</i>.'}
+      If none fits: last line break, else a hard cut. Chunks are contiguous, never overlap, and cover the whole file.</p>`,
+    `${esc(short(d.path))} → ${chunks.length} chunk${chunks.length > 1 ? 's' : ''} at max ${S.max} characters${fb ? `, ${fb} by fallback (no preferred boundary fitted)` : ''}. Drag “Max chunk size” to see the cuts move.`];
+},
+/* 3 tokenize */ () => {
+  const all = P.ix.chunks; if (S.chunk == null || S.chunk >= all.length) S.chunk = all.findIndex(c => c.context) >= 0 ? all.findIndex(c => c.context) : 0;
+  const c = all[S.chunk], items = tokenizeDetailed(searchable(c));
+  const opts = all.map((x, j) => `<option value="${j}" ${j === S.chunk ? 'selected' : ''}>${esc(short(x.file))} [${x.first}–${x.last}]</option>`).join('');
+  const chipsH = items.map(x => `<span class="tok ${x.kind} ${x.stop ? 'stop' : ''}" title="${esc(x.w)} → ${esc(x.s)}">${esc(x.s)}</span>`).join('');
+  const kept = items.filter(x => !x.stop).length;
+  return [`<label>Chunk <select id="chunkSel" style="max-width:100%">${opts}</select></label>
+    <h3>searchable_text = file path + context + content</h3>
+    <pre class="json"><span style="color:var(--c1)">${esc(c.file)}</span>\n<span style="color:var(--c4)">${esc(c.context) || '(no context)'}</span>\n${esc(c.content)}</pre>
+    <h3>CodeAwareTokenizer → ${kept} terms</h3>
+    <div class="legend" style="margin:0 0 4px"><span><span class="tok id">full identifier</span></span><span><span class="tok part">word from inside it</span></span><span><span class="tok stop">stop word</span> dropped</span></div>
+    <div>${chipsH}</div>
+    <p class="small">Lowercased, Snowball-stemmed (“quantized” → <code>quantiz</code>), identifiers kept whole <i>and</i> split
+      (<code>max_model_len</code> → <code>max_model_len</code>, <code>max</code>, <code>model</code>, <code>len</code>). Question words and <code>vllm</code> are stop words.</p>`,
+    `Every chunk is turned into a bag of terms. The path and heading path are indexed too, so “quantization/README.md” and “Quark” are searchable words even where the content doesn't repeat them.`];
+},
+/* 4 index */ () => {
+  const ix = P.ix, terms = Object.keys(ix.df).sort((a, b) => ix.idf(b) - ix.idf(a));
+  const show = [...terms.slice(0, 5), ...terms.slice(-4)];
+  const tbl = show.map(t => `<tr><td class="mono">${esc(t)}</td><td class="num">${ix.df[t]}</td><td class="num">${ix.idf(t).toFixed(3)}</td></tr>`).join('');
+  const c0 = ix.chunks[0];
+  return [`<div class="two"><div>
+      <h3>Statistics BM25 needs</h3>
+      <dl class="kv"><dt>chunks N</dt><dd>${ix.N}</dd><dt>avg length (terms)</dt><dd>${ix.avgdl.toFixed(1)}</dd><dt>vocabulary</dt><dd>${terms.length} terms</dd><dt>scoring</dt><dd>bm25s, Lucene, k1=1.5, b=0.75</dd></dl>
+      <h3>Rarest vs commonest terms</h3>
+      <table class="t"><tr><th>term</th><th>df (chunks)</th><th>idf</th></tr>${tbl}</table>
+      <p class="small">idf = ln(1 + (N − df + 0.5) / (df + 0.5)): a term in few chunks is worth a lot.</p>
+    </div><div>
+      <h3>BM25Index.save("data/processed/bm25")</h3>
+      <pre class="json">index/          ← bm25s score arrays
+chunks.jsonl    ← one chunk per line
+manifest.json</pre>
+      <h3>chunks.jsonl (line 1)</h3>
+      <pre class="json">${esc(JSON.stringify({ file_path: c0.file, content: c0.content.slice(0, 60) + '…', first_character_index: c0.first, last_character_index: c0.last, document_type: c0.type, context: c0.context }, null, 1))}</pre>
+      <h3>manifest.json</h3>
+      <pre class="json">${esc(JSON.stringify({ format_version: 2, tokenizer: 'code-aware-v3', chunk_count: ix.N }, null, 2))}</pre>
+      <p class="small">Loading checks the format and tokenizer name, so an index built with another tokenizer is refused.</p>
+    </div></div>`,
+    `Chunks are sorted by (file, range), tokenized and handed to bm25s, which precomputes every term's weight. Everything is saved, so <code>search</code> never re-reads the repo.`];
+},
+/* 5 tokenize question */ () => {
+  const items = tokenizeDetailed(S.query);
+  const known = P.res.q.filter(t => P.ix.df[t]);
+  return [`<div class="qbubble" style="font-size:1.05rem">💬 ${esc(S.query)}</div>
+    <h3>Same CodeAwareTokenizer</h3><div>${items.map(x => `<span class="tok ${x.kind} ${x.stop ? 'stop' : ''}">${esc(x.s)}</span>`).join('') || '<i class="small">no terms</i>'}</div>
+    <p class="small">${P.res.q.length} query terms, ${known.length} of them exist in the index${P.res.q.length > known.length ? ` (${P.res.q.filter(t => !P.ix.df[t]).map(esc).join(', ')} never occur in any chunk, so they can't score)` : ''}.</p>`,
+    P.res.q.length ? `The question goes through the exact tokenizer used for the chunks: “${esc(S.query)}” becomes ${P.res.q.map(t => `<code>${esc(t)}</code>`).join(' ')}.` : 'No indexable terms, so search returns nothing and the answer step replies “The provided context does not contain the answer.”'];
+},
+/* 6 score */ () => {
+  const { ranked, top, q } = P.res; if (!ranked.length) return ['<p>No query terms.</p>', 'Nothing to score.'];
+  const max = Math.max(ranked[0].total, 1e-9), uq = [...new Set(q)];
+  const col = t => css(TERM_COLORS[uq.indexOf(t) % TERM_COLORS.length]);
+  if (S.sel == null || S.sel >= ranked.length) S.sel = 0;
+  let rows = '';
+  ranked.forEach((r, j) => {
+    if (j === top.length) rows += `<div class="topk-line"><span>top-${S.k} cut</span></div>`;
+    const segs = r.parts.filter(p => p.s > 0).map(p => `<i style="width:${p.s / max * 100}%;background:${col(p.t)}"></i>`).join('');
+    rows += `<div class="row ${j === S.sel ? 'sel' : ''} ${j >= top.length ? 'cut' : ''}" data-r="${j}"><span class="lbl">${esc(short(r.chunk.file).split('/').pop())} [${r.chunk.first}–${r.chunk.last}]</span>
+      <span class="bar">${segs}</span><span class="num">${r.total.toFixed(4)}</span></div>`;
+  });
+  const r = ranked[S.sel], dl = r.parts.find(p => p.dl)?.dl ?? P.ix.docs[r.i].length;
+  const calc = `${esc(short(r.chunk.file))} [${r.chunk.first}–${r.chunk.last}]   length = ${dl} terms, avg = ${P.ix.avgdl.toFixed(1)}\n` +
+    r.parts.map(p => p.tf ? `${p.t.padEnd(14)} ${p.idf.toFixed(3)} × ${p.tf}/(${p.tf} + 1.5×(0.25 + 0.75×${dl}/${P.ix.avgdl.toFixed(1)})) = ${p.s.toFixed(4)}`
+      : `${p.t.padEnd(14)} ${P.ix.df[p.t] ? 'not in this chunk' : 'in no chunk'} → 0`).join('\n') + `\n${'total'.padEnd(14)} ${r.total.toFixed(4)}`;
+  return [`<div class="legend" style="margin:0 0 6px">${uq.map(t => `<span><i style="background:${col(t)}"></i>${esc(t)}</span>`).join('')}</div>
+    <div class="bars">${rows}</div><pre class="calc">${calc}</pre><p class="small">Click a row for its breakdown. Score = Σ over query terms of idf × saturating tf, shortened for long chunks (b) and capped for repeats (k1).</p>`,
+    `Every chunk gets one BM25 score; colours show which query term earned it. #1 is ${esc(short(ranked[0].chunk.file))} [${ranked[0].chunk.first}–${ranked[0].chunk.last}] with ${ranked[0].total.toFixed(4)}.`];
+},
+/* 7 top-k */ () => {
+  const { top } = P.res, zeros = top.filter(r => r.total === 0).length;
+  const json = { question_id: '…', question: S.query, retrieved_sources: top.map(r => ({ file_path: r.chunk.file, first_character_index: r.chunk.first, last_character_index: r.chunk.last })) };
+  return [`<h3>MinimalSearchResults (what <code>search</code> writes)</h3><pre class="json">${esc(JSON.stringify(json, null, 2))}</pre>
+    <p class="small">No text, no scores: just where to look. Each range is checked to be ≤ 2,000 characters (the grader rejects longer ones).</p>`,
+    `Keep the best k = ${S.k} as locations. ${zeros ? `⚠ ${zeros} of them scored 0. bm25s still returns k results, so weak matches fill the list.` : 'All of them matched at least one query term.'}`];
+},
+/* 8 re-read */ () => {
+  const ex = P.excerpts;
+  return [ex.map((e, j) => `<h3>[${j + 1}] open ${esc(short(e.file))} → text[${e.first}:${e.last}]</h3><pre class="src">${esc(e.content)}</pre>`).join('') || '<p>No sources.</p>',
+    `<code>answer</code> starts from those locations: SourceContextLoader re-opens each file and slices the character range. Unreadable or out-of-range sources are skipped with a warning.`];
+},
+/* 9 prompt */ () => {
+  const { blocks, dropped, used } = P.prompt;
+  const ctx = blocks.length ? blocks.map(b => `<span class="hdr">${esc(b.header)}</span>${esc(b.body)}${b.cut ? `<span class="tr">${esc(TRUNC)}</span>` : ''}`).join('\n\n') : '(no context available)';
+  const meter = blocks.map((b, j) => `<i style="width:${b.tokens / S.budget * 100}%;background:${css(TERM_COLORS[j % 5])}" title="[${j + 1}] ≈${b.tokens} tokens"></i>`).join('');
+  return [`<div class="small">Context budget: ≈${used} of ${S.budget} tokens used${dropped ? `, <b style="color:var(--bad)">${dropped} excerpt${dropped > 1 ? 's' : ''} dropped</b>` : ''}${blocks.some(b => b.cut) ? ', <b style="color:var(--bad)">last one truncated</b>' : ''}</div>
+    <div class="meter">${meter}</div>
+    <h3>system</h3><pre class="prompt"><span class="sys">${esc(SYSTEM_PROMPT)}</span></pre>
+    <h3>user</h3><pre class="prompt">Context:\n${ctx}\n\nQuestion: <span class="q">${esc(S.query)}</span>\n\nAnswer using only the context above.</pre>`,
+    `PromptBuilder numbers the excerpts in retrieval order, each headed by its path and range, until the ${S.budget}-token budget runs out; the excerpt that doesn't fit is cut with “[... truncated ...]”. Lower “Context budget” to watch it happen.`];
+},
+/* 10 qwen */ () => {
+  const has = P.preset && P.res.top.some(r => r.chunk.file === P.preset.ref.file && iou(r.chunk, P.preset.ref) >= MIN_IOU);
+  const ans = !P.excerpts.length ? 'The provided context does not contain the answer.'
+    : P.preset ? (has ? P.preset.good : 'The context does not cover it.') : null;
+  return [`<dl class="kv"><dt>model</dt><dd>Qwen/Qwen3-0.6B, float32, on cuda → mps → cpu</dd><dt>messages</dt><dd>system + user (previous step), chat template, enable_thinking=False</dd>
+      <dt>decoding</dt><dd>greedy (do_sample=False), max_new_tokens=160</dd><dt>clean-up</dt><dd>remove &lt;think&gt;…&lt;/think&gt;, trim</dd></dl>
+    <h3>Answer</h3>${ans ? `<div class="answer ${has || !P.excerpts.length ? '' : 'bad'}">🤖 ${esc(ans)}</div><p class="small">Illustrative: this page can't run Qwen. Your <code>answer</code> command does.</p>`
+      : '<p class="small">Custom question: this page can\'t run Qwen. Run <code>uv run python -m src answer "…"</code> for the real answer.</p>'}
+    <p class="small">With zero readable excerpts the model isn't called at all; the fixed reply is “The provided context does not contain the answer.”</p>`,
+    `Qwen sees only the prompt. Nothing about the repo was trained into it, so a good answer depends on the right chunk being in the top-k.`];
+},
+/* 11 recall */ () => {
+  if (!P.preset) return ['<p class="small">Recall needs a reference source. Pick one of the preset questions.</p>', 'Custom questions have no reference answer, so Recall@k can\'t be computed.'];
+  const R = P.preset.ref, d = DOCS.find(x => x.path === R.file), L = d.content.length;
+  const rows = P.res.top.map((r, j) => { const c = r.chunk, same = c.file === R.file, v = same ? iou(c, R) : 0;
+    return { j, c, same, v }; });
+  const found = rows.some(r => r.same && r.v >= MIN_IOU);
+  const pct = x => (x / L * 100).toFixed(2) + '%';
+  const bars = rows.filter(r => r.same).map(r => `<div style="position:relative;height:16px;margin:3px 0"><div style="position:absolute;left:${pct(r.c.first)};width:${pct(r.c.last - r.c.first)};height:100%;background:${css('--c1')};opacity:.6;border-radius:3px"></div><span class="small" style="position:absolute;left:4px;top:-1px">[${r.j + 1}] IoU ${r.v.toFixed(3)}</span></div>`).join('');
+  const tbl = rows.map(r => `<tr class="${r.same ? '' : 'dim'}"><td>${r.j + 1}</td><td class="mono">${esc(short(r.c.file))} [${r.c.first}–${r.c.last}]</td><td class="num">${r.same ? r.v.toFixed(3) : 'other file'}</td><td>${r.same && r.v >= MIN_IOU ? '✓' : ''}</td></tr>`).join('');
+  return [`<h3>Reference source for this question</h3><p class="mono">${esc(short(R.file))} [${R.first}–${R.last}]</p>
+    <div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px">
+      <div class="small">${esc(short(R.file))}: 0 … ${L} characters</div>
+      <div style="position:relative;height:16px;margin:3px 0"><div style="position:absolute;left:${pct(R.first)};width:${pct(R.last - R.first)};height:100%;background:${css('--good')};border-radius:3px"></div><span class="small" style="position:absolute;left:4px;top:-1px">reference</span></div>
+      ${bars || '<div class="small">no retrieved source in this file</div>'}
+    </div>
+    <table class="t" style="margin-top:10px"><tr><th>#</th><th>retrieved</th><th>IoU</th><th>≥ 0.05</th></tr>${tbl}</table>
+    <h3>Recall@${S.k} for this question = ${found ? 1 : 0} / 1</h3>
+    <p class="small">A reference counts as found if a top-k source is in the same file and overlaps it with IoU = overlap ÷ union ≥ 0.05. The dataset score is the mean over all questions.</p>`,
+    found ? `Found: a retrieved range overlaps the reference enough (IoU ≥ 0.05). This is the number the subject's Recall@5 limit is about.` : `Missed: no top-${S.k} range overlaps the reference with IoU ≥ 0.05, so recall for this question is 0.`];
+},
+];
+
+const WIRE = {
+  1: () => document.querySelectorAll('[data-file]').forEach(b => b.onclick = () => { S.file = +b.dataset.file; stepper.go(1); }),
+  2: () => { const s = $('#chunkSel'); if (s) s.onchange = () => { S.chunk = +s.value; stepper.go(2); }; },
+  5: () => document.querySelectorAll('.bars .row').forEach(r => r.onclick = () => { S.sel = +r.dataset.r; stepper.go(5); }),
+};
+
+/* =================== Controls =================== */
+const stepper = new Stepper($('#controls'), { frames: STAGES, render, autoplay: false, start: 1, speed: 9000 });
+const qs = $('#qs'), qIn = $('#q');
+PRESETS.forEach((p, j) => { const b = document.createElement('button'); b.textContent = ['Context length', 'Quark checkpoint', 'block_size'][j];
+  b.title = p.q; b.onclick = () => setQuery(p.q); qs.appendChild(b); });
+function setQuery(q) {
+  S.query = q; qIn.value = q; S.sel = null;
+  [...qs.children].forEach((b, j) => b.classList.toggle('on', PRESETS[j].q === q));
+  stepper.go(stepper.i < 4 ? 5 : stepper.i);
+}
+qIn.addEventListener('change', () => { if (qIn.value.trim()) setQuery(qIn.value.trim()); });
+qIn.addEventListener('keydown', e => { if (e.key === 'Enter') qIn.blur(); });
+const K = $('#knobs');
+slider(K, { label: 'Max chunk size', min: 60, max: MAX_CHUNK_SIZE, step: 10, value: S.max, fmt: v => v + (v === 2000 ? ' (real)' : ''),
+  onInput: v => { S.max = v; S.chunk = null; S.sel = null; stepper.go(stepper.i); } });
+slider(K, { label: 'k', min: 1, max: 8, value: S.k, onInput: v => { S.k = v; stepper.go(stepper.i); } });
+slider(K, { label: 'Context budget', min: 20, max: 2500, step: 10, value: S.budget, fmt: v => v + ' tok', onInput: v => { S.budget = v; stepper.go(stepper.i); } });
+setQuery(S.query); stepper.go(1);
+</script>
+</body>
+</html>
